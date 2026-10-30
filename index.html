@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FraudIntel</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --canvas: #f3f2f1;
+            --ink: #201f1e;
+            --muted: #605e5c;
+            --line: #edebe9;
+            --card: #ffffff;
+            --accent: #e66c37;
+            --good: #107c10;
+            --bad: #d13438;
+            --warn: #8a6116;
+            --sans: "Segoe UI", sans-serif;
+            --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            display: flex;
+            overflow: hidden;
+            background: var(--canvas);
+            color: var(--ink);
+            font-family: var(--sans);
+            font-size: 13px;
+            line-height: 1.35;
+        }
+        aside {
+            width: 216px;
+            flex: none;
+            background: #201f1e;
+            color: #f3f2f1;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 10px 12px;
+        }
+        .brand { font-size: 16px; font-weight: 600; padding: 0 8px 14px; }
+        .brand span { display: block; font-size: 11px; font-weight: 400; color: #a19f9d; margin-top: 2px; }
+        nav { display: flex; flex-direction: column; gap: 2px; }
+        nav button {
+            text-align: left;
+            border: 0;
+            background: transparent;
+            color: #d2d0ce;
+            font: inherit;
+            padding: 9px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        nav button.active, nav button:hover { background: #3b3a39; color: white; }
+        nav button.active { box-shadow: inset 3px 0 0 var(--accent); }
+        .status { margin-top: auto; padding: 10px 8px 0; font-size: 11px; color: #a19f9d; line-height: 1.4; }
+        .status a { color: #f3d2c4; }
+        main { flex: 1; min-width: 0; height: 100%; min-height: 0; overflow: hidden; position: relative; }
+        .view { display: none; height: 100%; min-height: 0; }
+        .view.scroll.active { display: block; overflow: auto; padding: 14px 16px 28px; }
+        .view.fit.active { display: flex; flex-direction: column; overflow: hidden; padding: 12px 14px; gap: 10px; }
+        #view-infer.active {
+            display: grid;
+            grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+            grid-template-rows: auto minmax(0, 1fr);
+            overflow: hidden;
+            gap: 10px;
+            padding: 12px 14px;
+        }
+        h1 { font-size: 18px; font-weight: 600; margin: 0; }
+        h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+        .page-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+        .page-head p, .muted { color: var(--muted); margin: 0; }
+        .kpis, .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .kpi, .stats > div, .tile {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 2px;
+            box-shadow: 0 1.6px 3.6px rgba(0,0,0,.06);
+        }
+        .kpi, .stats > div { padding: 8px 12px; }
+        .kpi span, .stats p { display: block; margin: 0; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+        .kpi strong, .stats strong { display: block; margin-top: 2px; font-size: 22px; font-weight: 600; line-height: 1.15; }
+        .tile { padding: 10px 12px; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+        .chart-box { position: relative; height: 280px; }
+        .tile .chart-box { flex: 1; height: auto; min-height: 0; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .insight-list { margin: 0; padding-left: 16px; }
+        .insight-list li { margin: 4px 0; }
+        .lede { color: var(--muted); margin: 0; }
+        .kpis > div, .stats > div { background: var(--card); border: 1px solid var(--line); border-radius: 2px; box-shadow: 0 1.6px 3.6px rgba(0,0,0,.06); padding: 8px 12px; }
+        .view.scroll .chart-box { height: 280px; flex: none; }
+        .view.fit .chart-box, #view-infer .chart-box { flex: 1; height: auto; min-height: 0; }
+        label { display: block; margin: 0 0 2px; color: var(--muted); font-size: 11px; }
+        input, select {
+            width: 100%;
+            font: inherit;
+            color: var(--ink);
+            background: white;
+            border: 1px solid #c8c6c4;
+            border-radius: 2px;
+            padding: 5px 8px;
+        }
+        input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+        .field { margin: 0; }
+        button.primary, button.quiet { font: inherit; border-radius: 2px; padding: 6px 10px; cursor: pointer; }
+        button.primary { background: var(--accent); color: white; border: 0; }
+        button.primary:disabled { opacity: 0.55; cursor: wait; }
+        button.quiet { background: white; border: 1px solid #c8c6c4; color: var(--ink); }
+        button.quiet:disabled { opacity: 0.45; }
+        .actions, .save-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+        .save-row input { flex: 1; }
+        .choice { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+        .choice input { width: auto; }
+        .train-controls { display: grid; grid-template-columns: 0.9fr 1.2fr; gap: 10px; flex: none; max-height: 42%; min-height: 0; }
+        .train-controls .tile { overflow: hidden; min-height: 0; }
+        #model-list { flex: 1; min-height: 0; overflow: auto; }
+        .model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); font-size: 12px; }
+        .model-row button { padding: 3px 8px; }
+        .log-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #1b1a19; color: #e1dfdd; border-radius: 2px; }
+        .log-title { padding: 6px 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #a19f9d; border-bottom: 1px solid #3b3a39; }
+        #train-log { flex: 1; min-height: 0; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.45; padding: 8px 10px; }
+        .log-line.error { color: #f48771; }
+        .log-line.ok { color: #89d185; }
+        #tune-result { margin-top: 8px; color: var(--muted); }
+        .steps { list-style: none; margin: 0; padding: 0; }
+        .steps li { padding: 8px 0; border-top: 1px solid var(--line); }
+        .steps h3 { margin: 0; font-size: 13px; font-weight: 600; }
+        .steps p { margin: 2px 0 0; color: var(--muted); }
+        .group { margin-top: 12px; }
+        .group h3 { margin: 0 0 4px; font-size: 13px; }
+        .banner { position: absolute; top: 10px; right: 14px; z-index: 6; background: white; border: 1px solid var(--line); padding: 8px 12px; max-width: 420px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+        .banner.error { border-color: var(--bad); color: var(--bad); }
+        #toast[hidden], #insight-body[hidden], #insight-empty[hidden], #review-body[hidden], #review-empty[hidden] { display: none !important; }
+        #view-insights #insight-body:not([hidden]) {
+            display: grid;
+            flex: 1;
+            min-height: 0;
+            grid-template-columns: 1.15fr 1fr 0.9fr;
+            grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 1fr);
+            gap: 8px;
+        }
+        .span-all { grid-column: 1 / -1; margin: 0; }
+        .thr { display: flex; align-items: center; gap: 8px; }
+        .thr input[type="range"] { flex: 1; }
+        .thr input[type="number"] { width: 72px; }
+        #view-insights #insight-body:not([hidden]) > * { min-height: 0; min-width: 0; }
+        #insight-body .span-all.tile p { margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 4px 0; }
+        .result { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 2px; }
+        .result.safe { background: #dff6dd; color: var(--good); }
+        .result.warn { background: #fff4ce; color: var(--warn); }
+        .result.fraud { background: #fde7e9; color: var(--bad); }
+        .kicker { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; opacity: .8; }
+        .result .big { font-size: 18px; font-weight: 600; line-height: 1.2; }
+        .track { height: 6px; background: rgba(0,0,0,.08); margin: 6px 0; overflow: hidden; }
+        .track span { display: block; height: 100%; background: currentColor; }
+        .chips { display: flex; gap: 4px; overflow-x: auto; flex-wrap: nowrap; margin: 0 0 8px; }
+        .chip { flex: none; border: 1px solid var(--line); background: #faf9f8; border-radius: 2px; padding: 3px 8px; font: inherit; font-size: 11px; cursor: pointer; }
+        #score-form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+        #score-form .wide { grid-column: 1 / -1; }
+        #signal-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 40px; overflow: hidden; margin: 4px 0; padding: 0; list-style: none; }
+        #signal-list li { background: #f3f2f1; padding: 2px 6px; border-radius: 2px; }
+        .flags { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; }
+        #view-infer .tile { min-height: 0; overflow: hidden; }
+        #view-infer .page-head { grid-column: 1 / -1; margin: 0; align-items: center; }
+        .model-pick { display: flex; align-items: center; gap: 8px; }
+        .model-pick label { margin: 0; }
+        .model-pick select { width: 220px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+        th { color: var(--muted); font-weight: 600; font-size: 11px; }
+        td.num, th.num { text-align: right; font-family: var(--mono); }
+        .table-wrap { overflow: auto; max-height: 320px; }
+        .matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex: 1; align-content: start; }
+        .cell { background: #faf9f8; padding: 8px; }
+        .cell span { display: block; color: var(--muted); font-size: 11px; }
+        .cell strong { font-size: 20px; font-weight: 600; }
+        .tag { margin-left: 6px; font-size: 11px; background: #f4e7e0; color: #8c3c22; padding: 1px 6px; border-radius: 2px; }
+        .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+        .mono { font-family: var(--mono); }
+        #spot-table { margin-top: 6px; color: var(--muted); }
+        #view-preprocess .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .prep-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .flow-card { background: white; border: 1px solid var(--line); border-radius: 2px; box-shadow: 0 1.6px 3.6px rgba(0,0,0,.06); padding: 10px 12px 12px; min-width: 0; border-top: 3px solid var(--accent); }
+        .flow-num { display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--accent); margin-bottom: 4px; }
+        .flow-card strong { display: block; font-size: 13px; margin-bottom: 4px; }
+        .flow-card p { margin: 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 3.9em; }
+        .prep-mid { display: grid; grid-template-columns: 0.8fr 0.9fr 1.4fr; gap: 10px; margin-bottom: 10px; }
+        .drop-card, .split-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+        .drop-card:first-child, .split-row:first-of-type { border-top: 0; }
+        .drop-card strong, .split-row strong { font-size: 12px; }
+        .drop-card span, .split-meta { color: var(--muted); font-size: 12px; }
+        .split-bar { display: flex; height: 22px; background: #f3f2f1; overflow: hidden; margin: 8px 0 4px; }
+        .split-bar i { display: block; height: 100%; }
+        .split-bar i:nth-child(1) { background: #118dff; }
+        .split-bar i:nth-child(2) { background: #e66c37; }
+        .split-bar i:nth-child(3) { background: #12239e; }
+        .flag-legend { display: flex; gap: 14px; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+        .flag-legend b { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
+        .flag-legend .legit { background: #8a8886; }
+        .flag-legend .fraud { background: #e66c37; }
+        .flag-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) 92px; gap: 8px; align-items: center; margin: 5px 0; }
+        .flag-row em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .flag-tracks { display: grid; gap: 3px; }
+        .flag-track { height: 7px; background: #f3f2f1; }
+        .flag-track span { display: block; height: 100%; background: #8a8886; }
+        .flag-track.fraud span { background: #e66c37; }
+        .flag-nums { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; }
+        .flag-nums .hot { color: #c43e1c; font-weight: 600; }
+        .prep-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .group-card h2 { display: flex; justify-content: space-between; align-items: center; }
+        .feat-list { list-style: none; margin: 0; padding: 0; }
+        .feat-list li { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
+        .feat-list li span:last-child { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #view-infer.active {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: auto; /* Changed from hidden to auto */
+    gap: 10px;
+    padding: 12px 14px;
+}
+#view-insights {
+    overflow-y: auto; /* Ensure the view itself can scroll */
+}
+
+#view-insights #insight-body:not([hidden]) {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: 1.15fr 1fr 0.9fr;
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    overflow-y: auto; /* Allows internal grid scrolling if needed */
+}
+.tile {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: 0 1.6px 3.6px rgba(0,0,0,.06);
+    padding: 10px 12px;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Enables scrolling inside individual tiles if content overflows */
+}
+/* Force scrolling on the Inference view and its tiles */
+#view-infer.active {
+    overflow-y: auto !important;
+}
+#view-infer .tile {
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+
+/* Force scrolling on the Insights view */
+#view-insights.active {
+    overflow-y: auto !important;
+}
+/* Force scrolling on the Inference view and its tiles */
+#view-infer.active {
+    overflow-y: auto !important;
+}
+#view-infer .tile {
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+
+/* Force scrolling on the Insights view */
+#view-insights.active {
+    overflow-y: auto !important;
+}
+#view-insights.fit.active {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 12px 14px 28px;
+}
+
+#view-insights #insight-body:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+    align-items: stretch;
+    min-height: 0;
+}
+
+#view-insights #insight-body .chart-box {
+    height: 240px;
+    min-height: 240px;
+    flex: none;
+}
+
+#view-insights #insight-body .tile {
+    min-height: 280px;
+}
+
+#view-insights #insight-body .span-all {
+    grid-column: 1 / -1;
+    min-height: 0;
+}
+#view-infer.active {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 12px 14px 28px;
+}
+
+#view-infer > .tile {
+    margin-bottom: 10px;
+    min-height: 0;
+    overflow: visible;
+}
+
+#view-infer .chart-box {
+    height: 260px;
+    min-height: 260px;
+    flex: none;
+}
+@media (max-width: 900px) {
+    #view-insights #insight-body:not([hidden]) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #view-insights #insight-body .span-all {
+        grid-column: 1;
+    }
+}
+    </style>
+</head>
+<body>
+    <aside>
+        <div class="brand">FraudIntel<span>Fraud detection</span></div>
+        <nav aria-label="Sections">
+            <button type="button" class="active" data-view="data">Data</button>
+            <button type="button" data-view="preprocess">Preprocessing</button>
+            <button type="button" data-view="train">Train</button>
+            <button type="button" data-view="insights">Insights</button>
+            <button type="button" data-view="infer">Inference</button>
+        </nav>
+        <div class="status" id="side-status">Loading…</div>
+    </aside>
+    <main>
+        <div id="toast" class="banner" hidden></div>
+
+        <section class="view scroll active" id="view-data">
+            <div class="page-head">
+                <h1>Data</h1>
+                <p>Fraud_Analysis_Dataset.xlsx · raw file</p>
+            </div>
+            <div class="kpis" id="data-stats"></div>
+            <article class="tile" style="margin-bottom: 10px;">
+                <h2>Findings</h2>
+                <ul class="insight-list" id="data-findings"></ul>
+            </article>
+            <div class="grid-2">
+                <article class="tile">
+                    <h2>Transactions by type</h2>
+                    <div class="chart-box"><canvas id="chart-type"></canvas></div>
+                </article>
+                <article class="tile">
+                    <h2>Amount</h2>
+                    <div class="chart-box"><canvas id="chart-amount"></canvas></div>
+                </article>
+                <article class="tile">
+                    <h2>Step · dropped before training</h2>
+                    <div class="chart-box"><canvas id="chart-step"></canvas></div>
+                </article>
+                <article class="tile">
+                    <h2>Held-out test rows</h2>
+                    <div id="review-empty" class="muted">Load a model to list held-out rows.</div>
+                    <div id="review-body" hidden>
+                        <div class="field">
+                            <label for="review-filter">Filter</label>
+                            <select id="review-filter">
+                                <option value="all">All test rows</option>
+                                <option value="fraud">Actual fraud</option>
+                                <option value="legit">Actual legitimate</option>
+                                <option value="flagged">Flagged</option>
+                                <option value="wrong">Mistakes</option>
+                            </select>
+                        </div>
+                        <p class="muted" id="review-count"></p>
+                        <div class="table-wrap" id="review-table"></div>
+                        <div class="pager">
+                            <button class="quiet" id="page-prev" type="button">Previous</button>
+                            <span id="page-label"></span>
+                            <button class="quiet" id="page-next" type="button">Next</button>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="view scroll" id="view-preprocess">
+            <div class="page-head">
+                <h1>Preprocessing</h1>
+                <p>From 10 raw fields to 25 model columns</p>
+            </div>
+            <div class="kpis" id="prep-stats"></div>
+            <div class="prep-flow" id="prep-steps"></div>
+            <div class="prep-mid">
+                <article class="tile">
+                    <h2>Left out</h2>
+                    <div id="prep-dropped"></div>
+                </article>
+                <article class="tile">
+                    <h2>Frozen split</h2>
+                    <div id="prep-split"></div>
+                </article>
+                <article class="tile">
+                    <h2>Where fraud shows up</h2>
+                    <div id="prep-flags"></div>
+                </article>
+            </div>
+            <div class="prep-groups" id="prep-groups"></div>
+        </section>
+
+        <section class="view fit" id="view-train">
+            <div class="page-head">
+                <h1>Train</h1>
+                <p id="tune-message">Selected models train at the same time.</p>
+            </div>
+            <div class="train-controls">
+                <article class="tile">
+                    <h2>Models</h2>
+                    <div id="model-checks"></div>
+                    <div class="actions">
+                        <button class="primary" id="train-button" type="button">Tune selected</button>
+                        <button class="quiet" id="check-all" type="button">All four</button>
+                    </div>
+                </article>
+                <article class="tile">
+                    <h2>Saved models</h2>
+                    <div id="model-list"></div>
+                    <div class="save-row">
+                        <input id="save-name" type="text" placeholder="Copy name">
+                        <button class="quiet" id="save-copy" type="button">Save copy</button>
+                    </div>
+                    <div id="tune-result">No search yet.</div>
+                </article>
+            </div>
+            <div class="log-wrap">
+                <div class="log-title">Logs</div>
+                <div id="train-log"></div>
+            </div>
+        </section>
+
+        <section class="view fit" id="view-insights">
+            <div class="page-head">
+                <h1>Insights</h1>
+                <p id="insight-sub">Tune or load a model. Figures are the untouched test split.</p>
+            </div>
+            <div id="insight-empty" class="tile">No model is loaded yet.</div>
+            <div id="insight-body" hidden>
+                <div class="kpis span-all" id="insight-stats"></div>
+                <article class="tile span-all">
+                    <div class="thr">
+                        <label for="thr">Threshold</label>
+                        <input id="thr" type="range" min="0.001" max="0.99" step="any" value="0.5">
+                        <input id="thr-number" type="number" min="0.001" max="0.99" step="0.001" value="0.5">
+                        <button class="quiet" id="use-f1" type="button">Max F1</button>
+                        <button class="quiet" id="use-cost" type="button">Min cost</button>
+                    </div>
+                    <p class="muted" id="thr-caption"></p>
+                    <p class="muted" id="live-findings"></p>
+                    <p class="muted" id="insight-text"></p>
+                </article>
+                <article class="tile"><h2>ROC</h2><div class="chart-box"><canvas id="chart-roc"></canvas></div></article>
+                <article class="tile"><h2>Precision–recall</h2><div class="chart-box"><canvas id="chart-pr"></canvas></div></article>
+                <article class="tile"><h2>Confusion</h2><div class="matrix" id="confusion"></div></article>
+                <article class="tile"><h2>Split importance</h2><div class="chart-box"><canvas id="chart-importance"></canvas></div></article>
+                <article class="tile"><h2>Cost</h2><div class="chart-box"><canvas id="chart-cost"></canvas></div></article>
+                <article class="tile"><h2>Money</h2><div class="chart-box"><canvas id="chart-money"></canvas></div></article>
+            </div>
+        </section>
+
+        <section class="view" id="view-infer">
+            <div class="page-head">
+                <h1>Inference</h1>
+                <div class="model-pick">
+                    <label for="infer-model">Model</label>
+                    <select id="infer-model"></select>
+                </div>
+            </div>
+            <article class="tile">
+                <p class="muted" id="infer-note"></p>
+                <div class="chips" id="example-chips"></div>
+                <form id="score-form">
+                    <div class="field wide">
+                        <label for="type">Type</label>
+                        <select id="type">
+                            <option>TRANSFER</option>
+                            <option>CASH_OUT</option>
+                            <option>PAYMENT</option>
+                            <option>DEBIT</option>
+                            <option>CASH_IN</option>
+                        </select>
+                    </div>
+                    <div class="field"><label for="amount">Amount</label><input id="amount" type="number" min="0" step="0.01" required></div>
+                    <div class="field"><label for="oldbalanceOrg">Sender before</label><input id="oldbalanceOrg" type="number" min="0" step="0.01" required></div>
+                    <div class="field"><label for="newbalanceOrig">Sender after</label><input id="newbalanceOrig" type="number" min="0" step="0.01" required></div>
+                    <div class="field"><label for="oldbalanceDest">Recipient before</label><input id="oldbalanceDest" type="number" min="0" step="0.01" required></div>
+                    <div class="field"><label for="newbalanceDest">Recipient after</label><input id="newbalanceDest" type="number" min="0" step="0.01" required></div>
+                    <div class="actions wide">
+                        <button class="primary" id="score-button" type="submit">Score</button>
+                        <button class="quiet" id="spot-check" type="button">8 checks</button>
+                    </div>
+                </form>
+                <p class="muted" id="expected-note"></p>
+                <div id="spot-table">Spot check not run.</div>
+            </article>
+            <article class="tile">
+                <div id="result-card" class="result safe">
+                    <div>
+                        <div class="kicker">Call</div>
+                        <div class="big" id="risk-status">Waiting</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="kicker">Fraud probability</div>
+                        <div class="big" id="risk-probability">—</div>
+                    </div>
+                </div>
+                <div class="track"><span id="prob-bar" style="width:0%"></span></div>
+                <p class="clamp" id="summary-text">Score a transaction.</p>
+                <p class="clamp" id="action-text"></p>
+                <ul id="signal-list"></ul>
+                <div class="flags" id="flag-grid"></div>
+                <h2 style="margin-top: 8px;">What moved this score</h2>
+                <div class="chart-box"><canvas id="chart-contrib"></canvas></div>
+            </article>
+        </section>
+    </main>
+    <script>
+        const state = {
+            view: "data",
+            summary: null,
+            prep: null,
+            meta: null,
+            models: null,
+            evaluation: null,
+            review: { page: 1, filter: "all", pageSize: 8 },
+            expected: null,
+            filling: false,
+            curves: null,
+            thresholdTimer: null,
+            chartWarned: false,
+            examples: [],
+        };
+        const charts = {};
+        const FEE = 0.01;
+        const REVIEW_COST = 25;
+
+        function esc(value) {
+            return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+        }
+        function money(value) {
+            const number = Number(value) || 0;
+            const whole = Math.abs(number - Math.round(number)) < 1e-6;
+            return number.toLocaleString(undefined, { maximumFractionDigits: whole ? 0 : 2 });
+        }
+        function pct(value, digits = 2) { return (Number(value) * 100).toFixed(digits) + "%"; }
+        function detailMessage(detail) {
+            if (!detail) return "";
+            if (typeof detail === "string") return detail;
+            if (Array.isArray(detail)) return detail.map((item) => item.msg || JSON.stringify(item)).join(" ");
+            return JSON.stringify(detail);
+        }
+        function logLine(message, level = "info") {
+            const log = document.getElementById("train-log");
+            if (!log || !message) return;
+            const line = document.createElement("div");
+            line.className = "log-line " + level;
+            line.textContent = new Date().toLocaleTimeString() + "  " + message;
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+        function logComparison(rows) {
+            (rows || []).forEach((row) => {
+                const params = (row.parameters || []).map((item) => item.name + "=" + item.value).join(", ");
+                logLine(row.model + "  CV " + Number(row.cv_score || 0).toFixed(4) + "  val PR " + Number(row.pr_auc).toFixed(4) + "  " + params, "ok");
+            });
+        }
+        function toast(message, isError = false, alsoLog = true) {
+            const el = document.getElementById("toast");
+            el.hidden = !message;
+            el.className = isError ? "banner error" : "banner";
+            el.textContent = message || "";
+            if (message && alsoLog) logLine(message, isError ? "error" : "info");
+        }
+        async function api(path, options = {}) {
+            const headers = { ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) };
+            let response;
+            try {
+                response = await fetch("/api/v1" + path, { ...options, headers, cache: "no-store" });
+            } catch (error) {
+                throw new Error("The API is not reachable. Open this page from the running server.");
+            }
+            const text = await response.text();
+            let data = {};
+            if (text) {
+                try { data = JSON.parse(text); } catch { data = { detail: text.slice(0, 300) }; }
+            }
+            if (!response.ok) throw new Error(detailMessage(data.detail) || response.statusText);
+            return data;
+        }
+        function chartReady() {
+            if (window.Chart) return true;
+            if (!state.chartWarned) {
+                state.chartWarned = true;
+                toast("The chart library did not load. The writing and tables still work.", true);
+            }
+            return false;
+        }
+        function ensureChart(id, config) {
+            if (!chartReady()) return null;
+            const canvas = document.getElementById(id);
+            if (!canvas) return null;
+            if (charts[id]) {
+                charts[id].data = config.data;
+                charts[id].options = config.options;
+                charts[id].update();
+                return charts[id];
+            }
+            charts[id] = new Chart(canvas, config);
+            return charts[id];
+        }
+        function chartOptions(extra = {}) {
+            return { responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: 4 }, plugins: { legend: { labels: { boxWidth: 14, font: { size: 13 } } } }, ...extra };
+        }
+        function showView(name) {
+            state.view = name;
+            document.querySelectorAll(".view").forEach((el) => el.classList.toggle("active", el.id === "view-" + name));
+            document.querySelectorAll("aside nav button").forEach((el) => el.classList.toggle("active", el.dataset.view === name));
+            if (name === "data") { renderData(); renderReview(); }
+            if (name === "preprocess") renderPrep();
+            if (name === "insights") renderInsights();
+            if (name === "infer") renderReview();
+            requestAnimationFrame(() => Object.values(charts).forEach((chart) => chart.resize()));
+        }
+        function renderStatus(health) {
+            const model = health.model_loaded
+                ? `${health.model_name} · threshold ${Number(health.applied_threshold).toFixed(3)}`
+                : "No model selected";
+            const rows = health.dataset_rows ? `${Number(health.dataset_rows).toLocaleString()} rows` : "Dataset unavailable";
+            document.getElementById("side-status").innerHTML = `${esc(rows)}<br>${esc(model)} · <a href="/docs">API</a>`;
+            if (health.dataset_error) toast(health.dataset_error, true);
+        }
+        function stat(label, value) {
+            return `<div><p>${esc(label)}</p><strong>${esc(value)}</strong></div>`;
+        }
+        function renderData() {
+            const summary = state.summary;
+            if (!summary) return;
+            const split = summary.split || {};
+            document.getElementById("data-stats").innerHTML = [
+                stat("Transactions", Number(summary.rows).toLocaleString()),
+                stat("Fraud rate", pct(summary.fraud_rate)),
+                stat("Median fraud amount", money(summary.median_amount_fraud)),
+                stat("Test rows", split.test ? split.test.rows.toLocaleString() : "—"),
+            ].join("");
+            document.getElementById("data-findings").innerHTML = summary.findings.map((line) => `<li>${esc(line)}</li>`).join("");
+            const types = summary.by_type;
+            ensureChart("chart-type", {
+                type: "bar",
+                data: {
+                    labels: types.map((row) => row.type),
+                    datasets: [
+                        { label: "Legitimate", data: types.map((row) => row.legit), backgroundColor: "#b7aea3", borderRadius: 6 },
+                        { label: "Fraud", data: types.map((row) => row.fraud), backgroundColor: "#c45c38", borderRadius: 6 },
+                    ],
+                },
+                options: chartOptions({ scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }),
+            });
+            ensureChart("chart-amount", {
+                type: "line",
+                data: {
+                    labels: summary.amount_hist.labels,
+                    datasets: [
+                        { label: "Legitimate", data: summary.amount_hist.legit, borderColor: "#6d746e", backgroundColor: "rgba(109,116,110,0.12)", fill: true, tension: 0.25, pointRadius: 0 },
+                        { label: "Fraud", data: summary.amount_hist.fraud, borderColor: "#c45c38", backgroundColor: "rgba(196,92,56,0.12)", fill: true, tension: 0.25, pointRadius: 0 },
+                    ],
+                },
+                options: chartOptions({ scales: { x: { ticks: { maxTicksLimit: 6, maxRotation: 0 } }, y: { beginAtZero: true } } }),
+            });
+            ensureChart("chart-step", {
+                type: "bar",
+                data: {
+                    labels: summary.step_hist.labels,
+                    datasets: [
+                        { label: "Legitimate", data: summary.step_hist.legit, backgroundColor: "#b7aea3" },
+                        { label: "Fraud", data: summary.step_hist.fraud, backgroundColor: "#c45c38" },
+                    ],
+                },
+                options: chartOptions({ scales: { x: { stacked: true, ticks: { maxTicksLimit: 12 } }, y: { stacked: true, beginAtZero: true } } }),
+            });
+            renderExampleChips();
+        }
+        function renderPrep() {
+            const prep = state.prep;
+            if (!prep) return;
+            const split = prep.split || {};
+            const trainRows = split.train ? split.train.rows : 0;
+            document.getElementById("prep-stats").innerHTML = [
+                stat("Rows kept", Number(prep.rows_out).toLocaleString()),
+                stat("Raw columns", String(prep.raw_columns)),
+                stat("Model features", String(prep.model_features)),
+                stat("Dropped", String(prep.dropped.length)),
+                stat("Train rows", trainRows ? trainRows.toLocaleString() : "—"),
+                stat("Train fraud", split.train ? split.train.fraud.toLocaleString() : "—"),
+            ].join("");
+            document.getElementById("prep-steps").innerHTML = prep.steps.map((step, index) => `
+                <article class="flow-card">
+                    <span class="flow-num">${String(index + 1).padStart(2, "0")}</span>
+                    <strong>${esc(step.title)}</strong>
+                    <p>${esc(step.detail)}</p>
+                </article>`).join("");
+            const dropWhy = {
+                step: "Later steps are fraud only",
+                nameOrig: "Account id, too many values",
+                nameDest: "Account id, too many values",
+            };
+            document.getElementById("prep-dropped").innerHTML = prep.dropped.map((name) => `
+                <div class="drop-card"><strong class="mono">${esc(name)}</strong><span>${esc(dropWhy[name] || "Not a model column")}</span></div>`).join("");
+            const parts = ["train", "validation", "test"].filter((key) => split[key]);
+            const total = parts.reduce((sum, key) => sum + split[key].rows, 0) || 1;
+            const bar = parts.map((key) => `<i style="width:${(split[key].rows / total) * 100}%"></i>`).join("");
+            const rows = parts.map((key) => `
+                <div class="split-row">
+                    <strong>${esc(key)}</strong>
+                    <span class="split-meta">${split[key].rows.toLocaleString()} rows · ${split[key].fraud.toLocaleString()} fraud</span>
+                </div>`).join("");
+            document.getElementById("prep-split").innerHTML = `<div class="split-bar">${bar}</div>${rows}`;
+            const flags = prep.flag_rates || [];
+            document.getElementById("prep-flags").innerHTML = `
+                <div class="flag-legend"><span><b class="legit"></b>Legitimate</span><span><b class="fraud"></b>Fraud</span></div>
+                ${flags.map((row) => `
+                    <div class="flag-row">
+                        <em title="${esc(row.label)}">${esc(row.label)}</em>
+                        <div class="flag-tracks">
+                            <div class="flag-track"><span style="width:${Math.max(0, Math.min(100, row.legit * 100))}%"></span></div>
+                            <div class="flag-track fraud"><span style="width:${Math.max(0, Math.min(100, row.fraud * 100))}%"></span></div>
+                        </div>
+                        <div class="flag-nums"><span>${pct(row.legit, 0)}</span><span class="hot">${pct(row.fraud, 0)}</span></div>
+                    </div>`).join("")}`;
+            const tones = ["#118dff", "#e66c37", "#12239e", "#107c10"];
+            document.getElementById("prep-groups").innerHTML = prep.groups.map((group, index) => `
+                <article class="tile group-card" style="border-top:3px solid ${tones[index % tones.length]}">
+                    <h2>${esc(group.title)}<span class="tag">${group.features.length}</span></h2>
+                    <ul class="feat-list">${group.features.map((feature) => `<li><span class="mono">${esc(feature.name)}</span><span title="${esc(feature.help)}">${esc(feature.help)}</span></li>`).join("")}</ul>
+                </article>`).join("");
+        }
+        function renderChoices() {
+            const notes = state.meta?.hyperparameters || {};
+            document.getElementById("model-checks").innerHTML = Object.entries(notes).map(([name, note]) => `
+                <label class="choice" title="${esc(note)}">
+                    <input type="checkbox" value="${esc(name)}" ${name === "XGBoost" ? "checked" : ""}>
+                    <span>${esc(name)}</span>
+                </label>`).join("");
+        }
+        function renderTuneResult(rows) {
+            const host = document.getElementById("tune-result");
+            if (!rows || !rows.length) {
+                host.textContent = "No search yet.";
+                return;
+            }
+            const best = rows.reduce((left, right) => Number(right.pr_auc) > Number(left.pr_auc) ? right : left);
+            host.textContent = "Best: " + best.model + " · val PR-AUC " + Number(best.pr_auc).toFixed(4) + " · test F1 " + Number(best.test_f1).toFixed(3);
+        }
+        function renderModels() {
+            const data = state.models;
+            const list = document.getElementById("model-list");
+            const select = document.getElementById("infer-model");
+            if (!data || !data.models.length) {
+                list.innerHTML = `<p class="muted">Nothing saved yet.</p>`;
+                select.innerHTML = `<option value="">No saved model</option>`;
+                return;
+            }
+            const bestName = (data.comparison || []).reduce((best, row) => (!best || row.pr_auc > best.pr_auc ? row : best), null);
+            list.innerHTML = data.models.map((model) => `
+                <div class="model-row">
+                    <span>${esc(model.model_name)}${model.active ? `<span class="tag">Active</span>` : ""}${bestName && model.model_name === bestName.model ? `<span class="tag">Best</span>` : ""}</span>
+                    <span class="mono">${Number(model.validation_pr_auc || 0).toFixed(4)}</span>
+                    <button class="quiet" type="button" data-action="load" data-file="${esc(model.filename)}" ${model.active ? "disabled" : ""}>Use</button>
+                    <button class="quiet" type="button" data-action="delete" data-file="${esc(model.filename)}">Delete</button>
+                </div>`).join("");
+            select.innerHTML = data.models.map((model) => `<option value="${esc(model.filename)}" ${model.active ? "selected" : ""}>${esc(model.model_name)}${model.active ? " · scoring" : ""}</option>`).join("");
+            renderTuneResult(data.comparison || []);
+        }
+        function metricsAt(rows, threshold) {
+            let tp = 0, fp = 0, tn = 0, fn = 0;
+            let missed = 0, fraudValue = 0, legitAll = 0, legitApproved = 0, fpAmount = 0;
+            rows.forEach((row) => {
+                const fraud = row.actual === 1;
+                const flag = row.probability >= threshold;
+                if (fraud) fraudValue += row.amount; else legitAll += row.amount;
+                if (fraud && flag) tp += 1;
+                else if (!fraud && flag) { fp += 1; fpAmount += row.amount; }
+                else if (!fraud && !flag) { tn += 1; legitApproved += row.amount; }
+                else { fn += 1; missed += row.amount; }
+            });
+            const precision = (tp + fp) ? tp / (tp + fp) : 0;
+            const recall = (tp + fn) ? tp / (tp + fn) : 0;
+            const f1 = (precision + recall) ? (2 * precision * recall) / (precision + recall) : 0;
+            const n = tp + fp + tn + fn;
+            const reviewCost = (tp + fp) * REVIEW_COST;
+            const lostFee = FEE * fpAmount;
+            const revenue = FEE * legitApproved;
+            const profit = revenue - missed - reviewCost;
+            const noModelProfit = FEE * legitAll - fraudValue;
+            return {
+                tp, fp, tn, fn, precision, recall, f1,
+                accuracy: n ? (tp + tn) / n : 0,
+                fpr: (fp + tn) ? fp / (fp + tn) : 0,
+                missed, fraudValue, reviewCost, lostFee, revenue, profit, noModelProfit,
+                uplift: profit - noModelProfit, alerts: tp + fp,
+                objective: missed + reviewCost + lostFee,
+            };
+        }
+        function currentThreshold() { return Number(document.getElementById("thr").value); }
+        function buildCurves(rows) {
+            const tradeoff = [];
+            const cost = [];
+            for (let step = 1; step <= 100; step += 1) {
+                const threshold = step / 100;
+                const metrics = metricsAt(rows, threshold);
+                tradeoff.push({ x: threshold, precision: metrics.precision, recall: metrics.recall, f1: metrics.f1 });
+                cost.push({ x: threshold, y: metrics.objective });
+            }
+            state.curves = { tradeoff, cost };
+        }
+        function renderInsights() {
+            const evaluation = state.evaluation;
+            const empty = document.getElementById("insight-empty");
+            const body = document.getElementById("insight-body");
+            if (!evaluation) {
+                empty.hidden = false;
+                body.hidden = true;
+                return;
+            }
+            empty.hidden = true;
+            body.hidden = false;
+            const split = evaluation.split.test;
+            document.getElementById("insight-sub").textContent = `${evaluation.model_name} on ${split.rows.toLocaleString()} untouched test rows, ${split.fraud} of them fraud.`;
+            const firstInsight = (evaluation.insights || [])[0] || "Tune again to record the best parameters.";
+            document.getElementById("insight-text").textContent = firstInsight;
+            document.getElementById("thr").value = evaluation.applied_threshold;
+            document.getElementById("thr-number").value = Number(evaluation.applied_threshold).toFixed(3);
+            buildCurves(evaluation.rows);
+            drawStaticCharts();
+            paintThreshold(evaluation.applied_threshold);
+            const note = document.getElementById("infer-note");
+            if (note) note.textContent = `Scoring with ${evaluation.model_name}. Max-F1 threshold ${Number(evaluation.threshold_f1).toFixed(3)}. Test PR-AUC ${Number(evaluation.headline.pr_auc).toFixed(4)}.`;
+        }
+        function drawStaticCharts() {
+            const evaluation = state.evaluation;
+            const curves = state.curves;
+            ensureChart("chart-roc", {
+                type: "line",
+                data: { datasets: [
+                    { label: "Model", data: evaluation.roc, borderColor: "#c45c38", pointRadius: 0, tension: 0.05 },
+                    { label: "Chance", data: [{ x: 0, y: 0 }, { x: 1, y: 1 }], borderColor: "#c4bdb4", borderDash: [5, 5], pointRadius: 0 },
+                    { label: "This threshold", data: [], backgroundColor: "#1c1b17", borderColor: "#1c1b17", pointRadius: 6, showLine: false },
+                ] },
+                options: chartOptions({ parsing: false, scales: { x: { min: 0, max: 1, title: { display: true, text: "False positive rate" } }, y: { min: 0, max: 1, title: { display: true, text: "True positive rate" } } } }),
+            });
+            ensureChart("chart-pr", {
+                type: "line",
+                data: { datasets: [
+                    { label: "Model", data: evaluation.pr, borderColor: "#c45c38", pointRadius: 0, tension: 0.05 },
+                    { label: "This threshold", data: [], backgroundColor: "#1c1b17", borderColor: "#1c1b17", pointRadius: 6, showLine: false },
+                ] },
+                options: chartOptions({ parsing: false, scales: { x: { min: 0, max: 1, title: { display: true, text: "Recall" } }, y: { min: 0, max: 1, title: { display: true, text: "Precision" } } } }),
+            });
+            ensureChart("chart-threshold", {
+                type: "line",
+                data: { datasets: [
+                    { label: "Precision", data: curves.tradeoff.map((row) => ({ x: row.x, y: row.precision })), borderColor: "#6d746e", pointRadius: 0 },
+                    { label: "Recall", data: curves.tradeoff.map((row) => ({ x: row.x, y: row.recall })), borderColor: "#c45c38", pointRadius: 0 },
+                    { label: "F1", data: curves.tradeoff.map((row) => ({ x: row.x, y: row.f1 })), borderColor: "#1c1b17", pointRadius: 0 },
+                    { label: "Selected", data: [], borderColor: "#1c1b17", borderDash: [4, 4], pointRadius: 0 },
+                ] },
+                options: chartOptions({ parsing: false, scales: { x: { min: 0, max: 1, title: { display: true, text: "Threshold" } }, y: { min: 0, max: 1 } } }),
+            });
+            ensureChart("chart-cost", {
+                type: "line",
+                data: { datasets: [
+                    { label: "Cost", data: curves.cost, borderColor: "#c45c38", pointRadius: 0 },
+                    { label: "Selected", data: [], borderColor: "#1c1b17", borderDash: [4, 4], pointRadius: 0 },
+                ] },
+                options: chartOptions({ parsing: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 1 }, y: { ticks: { callback: (value) => Intl.NumberFormat(undefined, { notation: "compact" }).format(value) } } } }),
+            });
+            const importance = evaluation.importance.slice().reverse();
+            ensureChart("chart-importance", {
+                type: "bar",
+                data: { labels: importance.map((row) => row.label), datasets: [{ data: importance.map((row) => row.importance), backgroundColor: "#c45c38", borderRadius: 6 }] },
+                options: chartOptions({ indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }),
+            });
+        }
+        function paintThreshold(threshold) {
+            if (!state.evaluation) return;
+            const metrics = metricsAt(state.evaluation.rows, threshold);
+            const headline = state.evaluation.headline;
+            document.getElementById("insight-stats").innerHTML = [
+                stat("Precision", pct(metrics.precision)),
+                stat("Recall", pct(metrics.recall)),
+                stat("F1", metrics.f1.toFixed(3)),
+                stat("Profit versus approve-all", money(metrics.uplift)),
+            ].join("");
+            document.getElementById("confusion").innerHTML = [
+                ["True negatives", metrics.tn],
+                ["False positives", metrics.fp],
+                ["False negatives", metrics.fn],
+                ["True positives", metrics.tp],
+            ].map(([label, value]) => `<div class="cell"><span>${label}</span><strong>${value.toLocaleString()}</strong></div>`).join("");
+            document.getElementById("live-findings").textContent = `${state.evaluation.model_name} @ ${threshold.toFixed(3)} · precision ${pct(metrics.precision)} · recall ${pct(metrics.recall)} · F1 ${metrics.f1.toFixed(3)} · PR-AUC ${Number(headline.pr_auc).toFixed(4)} · missed ${money(metrics.missed)} · alerts ${metrics.alerts.toLocaleString()}`;
+            document.getElementById("thr-caption").textContent = `${metrics.alerts.toLocaleString()} alerts. Objective cost ${money(metrics.objective)}.`;
+            const roc = charts["chart-roc"];
+            if (roc) { roc.data.datasets[2].data = [{ x: metrics.fpr, y: metrics.recall }]; roc.update(); }
+            const pr = charts["chart-pr"];
+            if (pr) { pr.data.datasets[1].data = [{ x: metrics.recall, y: metrics.precision }]; pr.update(); }
+            const tradeoff = charts["chart-threshold"];
+            if (tradeoff) { tradeoff.data.datasets[3].data = [{ x: threshold, y: 0 }, { x: threshold, y: 1 }]; tradeoff.update(); }
+            const cost = charts["chart-cost"];
+            if (cost && state.curves) {
+                const peak = Math.max(...state.curves.cost.map((point) => point.y));
+                cost.data.datasets[1].data = [{ x: threshold, y: 0 }, { x: threshold, y: peak }];
+                cost.update();
+            }
+            ensureChart("chart-money", {
+                type: "bar",
+                data: {
+                    labels: ["Fraud loss", "Review cost", "Profit"],
+                    datasets: [
+                        { label: "Approve everything", data: [metrics.fraudValue, 0, metrics.noModelProfit], backgroundColor: "#c4bdb4", borderRadius: 6 },
+                        { label: "This threshold", data: [metrics.missed, metrics.reviewCost, metrics.profit], backgroundColor: "#c45c38", borderRadius: 6 },
+                    ],
+                },
+                options: chartOptions({ scales: { y: { ticks: { callback: (value) => Intl.NumberFormat(undefined, { notation: "compact" }).format(value) } } } }),
+            });
+            if (state.view === "infer" || state.view === "data") renderReview();
+        }
+        function scheduleThresholdSave(threshold) {
+            clearTimeout(state.thresholdTimer);
+            state.thresholdTimer = setTimeout(async () => {
+                try {
+                    const result = await api("/threshold", { method: "POST", body: JSON.stringify({ threshold }) });
+                    if (state.evaluation) state.evaluation.applied_threshold = result.applied_threshold;
+                    renderStatus(await api("/health"));
+                } catch (error) { toast(error.message, true); }
+            }, 280);
+        }
+        function setThreshold(threshold, persist) {
+            const clamped = Math.min(0.99, Math.max(0.001, Number(threshold)));
+            document.getElementById("thr").value = clamped;
+            document.getElementById("thr-number").value = clamped.toFixed(3);
+            paintThreshold(clamped);
+            if (persist) scheduleThresholdSave(clamped);
+        }
+        function reviewSource() {
+            if (!state.evaluation) return [];
+            const threshold = currentThreshold();
+            return state.evaluation.rows.filter((row) => {
+                const flag = row.probability >= threshold;
+                if (state.review.filter === "fraud") return row.actual === 1;
+                if (state.review.filter === "legit") return row.actual === 0;
+                if (state.review.filter === "flagged") return flag;
+                if (state.review.filter === "wrong") return flag !== (row.actual === 1);
+                return true;
+            }).sort((a, b) => b.probability - a.probability);
+        }
+        function renderReview() {
+            const empty = document.getElementById("review-empty");
+            const body = document.getElementById("review-body");
+            if (!state.evaluation) { empty.hidden = false; body.hidden = true; return; }
+            empty.hidden = true;
+            body.hidden = false;
+            const rows = reviewSource();
+            const pages = Math.max(1, Math.ceil(rows.length / state.review.pageSize));
+            if (state.review.page > pages) state.review.page = pages;
+            const start = (state.review.page - 1) * state.review.pageSize;
+            const slice = rows.slice(start, start + state.review.pageSize);
+            const threshold = currentThreshold();
+            document.getElementById("review-count").textContent = `${rows.length.toLocaleString()} rows at threshold ${threshold.toFixed(3)}.`;
+            document.getElementById("page-label").textContent = `Page ${state.review.page} of ${pages}`;
+            const bodyRows = slice.map((row) => {
+                const flag = row.probability >= threshold;
+                const actual = row.actual === 1 ? "FRAUD" : "LEGIT";
+                const call = flag ? "FRAUD" : "LEGIT";
+                return `<tr>
+                    <td class="num">${row.id}</td><td>${esc(row.type)}</td><td class="num">${money(row.amount)}</td>
+                    <td class="num">${pct(row.probability)}</td><td>${call}</td><td>${actual}${call !== actual ? " · miss" : ""}</td>
+                    <td><button class="quiet" type="button" data-score-id="${row.id}">Open</button></td>
+                </tr>`;
+            }).join("");
+            document.getElementById("review-table").innerHTML = `<table><thead><tr><th>Id</th><th>Type</th><th class="num">Amount</th><th class="num">Probability</th><th>Call</th><th>Actual</th><th></th></tr></thead><tbody>${bodyRows || `<tr><td colspan="7">No rows in this filter.</td></tr>`}</tbody></table>`;
+        }
+        function fillForm(row, options = {}) {
+            state.filling = true;
+            ["type", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest"].forEach((id) => {
+                document.getElementById(id).value = row[id];
+            });
+            state.expected = row.expected || null;
+            document.getElementById("expected-note").textContent = state.expected ? `${row.note || "Selected row"}. Known label ${state.expected}.` : "";
+            state.filling = false;
+            if (!options.silent) showView("infer");
+        }
+        function renderExampleChips() {
+            const summary = state.summary;
+            if (!summary) return;
+            const chips = [...(summary.examples || []), ...(summary.hand_cases || [])];
+            state.examples = chips;
+            document.getElementById("example-chips").innerHTML = chips.map((row, index) => `<button class="chip" type="button" data-example="${index}">${esc(row.note || row.type)}</button>`).join("");
+        }
+        function readForm() {
+            return {
+                type: document.getElementById("type").value,
+                amount: Number(document.getElementById("amount").value),
+                oldbalanceOrg: Number(document.getElementById("oldbalanceOrg").value),
+                newbalanceOrig: Number(document.getElementById("newbalanceOrig").value),
+                oldbalanceDest: Number(document.getElementById("oldbalanceDest").value),
+                newbalanceDest: Number(document.getElementById("newbalanceDest").value),
+            };
+        }
+        function showPrediction(result) {
+            const card = document.getElementById("result-card");
+            card.className = "result " + (result.risk_level === "LOW" ? "safe" : result.risk_level === "MEDIUM" ? "warn" : "fraud");
+            document.getElementById("risk-status").textContent = result.is_fraud ? `Flagged fraud · ${result.risk_level}` : `Legitimate · ${result.risk_level}`;
+            document.getElementById("risk-probability").textContent = pct(result.fraud_probability);
+            document.getElementById("prob-bar").style.width = Math.max(0, Math.min(100, result.fraud_probability * 100)) + "%";
+            let summary = result.summary_text;
+            if (state.expected) {
+                const got = result.is_fraud ? "FRAUD" : "LEGIT";
+                summary += got === state.expected ? ` This matches the known label (${state.expected}).` : ` This does not match the known label (${state.expected}).`;
+            }
+            document.getElementById("summary-text").textContent = summary;
+            document.getElementById("action-text").textContent = result.recommended_action;
+            document.getElementById("signal-list").innerHTML = (result.signals || []).map((line) => `<li>${esc(line)}</li>`).join("");
+            const flags = result.features_analyzed || {};
+            document.getElementById("flag-grid").innerHTML = [
+                ["amount_eq_oldbal", "Amount equals old balance"],
+                ["orig_emptied", "Sender emptied"],
+                ["emptied_risky", "Emptied and risky type"],
+                ["dest_zero", "Recipient stays at 0"],
+                ["orig_recon_ok", "Sender ledger matches"],
+                ["dest_recon_ok", "Recipient ledger matches"],
+            ].map(([key, label]) => `<div><span class="kicker">${esc(label)}</span><br><strong>${Number(flags[key]) ? "Yes" : "No"}</strong></div>`).join("");
+            const contributions = result.contributions || [];
+            ensureChart("chart-contrib", {
+                type: "bar",
+                data: {
+                    labels: contributions.map((item) => item.label),
+                    datasets: [{ data: contributions.map((item) => item.delta), backgroundColor: contributions.map((item) => item.delta >= 0 ? "#c45c38" : "#1d6a39"), borderRadius: 6 }],
+                },
+                options: chartOptions({ indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: "Change in fraud probability" } } } }),
+            });
+        }
+        async function refreshModelsAndEval() {
+            state.models = await api("/models");
+            renderModels();
+            const health = await api("/health");
+            renderStatus(health);
+            if (health.model_loaded) {
+                state.evaluation = await api("/evaluation");
+                renderInsights();
+                renderReview();
+            } else {
+                state.evaluation = null;
+                renderInsights();
+                renderReview();
+            }
+        }
+        async function useModel(filename) {
+            await api("/models/load", { method: "POST", body: JSON.stringify({ filename }) });
+            await refreshModelsAndEval();
+        }
+
+        document.querySelectorAll("aside nav button").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+        document.getElementById("check-all").addEventListener("click", () => {
+            document.querySelectorAll("#model-checks input").forEach((input) => { input.checked = true; });
+        });
+        document.getElementById("train-button").addEventListener("click", async () => {
+            const selected = [...document.querySelectorAll("#model-checks input:checked")].map((input) => input.value);
+            if (!selected.length) { toast("Select at least one model.", true); return; }
+            const button = document.getElementById("train-button");
+            const message = document.getElementById("tune-message");
+            button.disabled = true;
+            try {
+                const start = await api("/train", { method: "POST", body: JSON.stringify({ models: selected }) });
+                logLine("Tuning " + selected.join(", "));
+                let job;
+                let last = "";
+                for (;;) {
+                    job = await api("/train/status");
+                    if (job.id === start.job_id) {
+                        const text = job.message || "Tuning.";
+                        message.textContent = text;
+                        if (text !== last) { last = text; logLine(text, job.status === "failed" ? "error" : "info"); }
+                        if (job.status === "complete" || job.status === "failed") break;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+                if (job.result && job.result.comparison) logComparison(job.result.comparison);
+                await refreshModelsAndEval();
+                showView("train");
+                if (job.status === "failed") toast(job.message, true, false);
+            } catch (error) {
+                toast(error.message, true);
+            } finally {
+                button.disabled = false;
+            }
+        });
+        document.getElementById("model-list").addEventListener("click", async (event) => {
+            const button = event.target.closest("button");
+            if (!button) return;
+            try {
+                if (button.dataset.action === "load") {
+                    await useModel(button.dataset.file);
+                    toast(`Scoring with ${button.dataset.file}.`);
+                }
+                if (button.dataset.action === "delete") {
+                    if (!confirm(`Delete ${button.dataset.file}?`)) return;
+                    await api("/models/" + encodeURIComponent(button.dataset.file), { method: "DELETE" });
+                    await refreshModelsAndEval();
+                }
+            } catch (error) { toast(error.message, true); }
+        });
+        document.getElementById("infer-model").addEventListener("change", async (event) => {
+            if (!event.target.value) return;
+            try { await useModel(event.target.value); }
+            catch (error) { toast(error.message, true); }
+        });
+        document.getElementById("save-copy").addEventListener("click", async () => {
+            const raw = document.getElementById("save-name").value.trim().replace(/\s+/g, "_");
+            if (!raw) { toast("Enter a name for the copy.", true); return; }
+            try {
+                const result = await api("/models/save", { method: "POST", body: JSON.stringify({ filename: raw }) });
+                toast(`Saved ${result.filename}.`);
+                document.getElementById("save-name").value = "";
+                await refreshModelsAndEval();
+            } catch (error) { toast(error.message, true); }
+        });
+        document.getElementById("example-chips").addEventListener("click", (event) => {
+            const button = event.target.closest("[data-example]");
+            if (!button) return;
+            fillForm(state.examples[Number(button.dataset.example)]);
+        });
+        document.getElementById("score-form").addEventListener("input", () => {
+            if (state.filling) return;
+            state.expected = null;
+            document.getElementById("expected-note").textContent = "";
+        });
+        document.getElementById("score-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const button = document.getElementById("score-button");
+            button.disabled = true;
+            try { showPrediction(await api("/predict", { method: "POST", body: JSON.stringify(readForm()) })); }
+            catch (error) { toast(error.message, true); }
+            finally { button.disabled = false; }
+        });
+        document.getElementById("spot-check").addEventListener("click", async () => {
+            const cases = state.summary?.hand_cases || [];
+            try {
+                const payload = await api("/predict/batch", {
+                    method: "POST",
+                    body: JSON.stringify({ transactions: cases.map(({ type, amount, oldbalanceOrg, newbalanceOrig, oldbalanceDest, newbalanceDest }) => ({ type, amount, oldbalanceOrg, newbalanceOrig, oldbalanceDest, newbalanceDest })) }),
+                });
+                let matches = 0;
+                payload.results.forEach((result, index) => {
+                    const expected = cases[index].expected;
+                    const call = result.is_fraud ? "FRAUD" : "LEGIT";
+                    const ok = call === expected;
+                    if (ok) matches += 1;
+                    logLine((cases[index].note || "case") + "  expected " + expected + "  call " + call + "  " + pct(result.fraud_probability), ok ? "ok" : "error");
+                });
+                document.getElementById("spot-table").textContent = matches + "/" + payload.count + " match · " + payload.model_name;
+            } catch (error) { toast(error.message, true); }
+        });
+        document.getElementById("thr").addEventListener("input", () => setThreshold(currentThreshold(), true));
+        document.getElementById("thr-number").addEventListener("change", () => setThreshold(document.getElementById("thr-number").value, true));
+        document.getElementById("use-f1").addEventListener("click", () => { if (state.evaluation) setThreshold(state.evaluation.threshold_f1, true); });
+        document.getElementById("use-cost").addEventListener("click", () => { if (state.evaluation) setThreshold(state.evaluation.threshold_cost, true); });
+        document.getElementById("review-filter").addEventListener("change", (event) => {
+            state.review.filter = event.target.value;
+            state.review.page = 1;
+            renderReview();
+        });
+        document.getElementById("page-prev").addEventListener("click", () => { state.review.page = Math.max(1, state.review.page - 1); renderReview(); });
+        document.getElementById("page-next").addEventListener("click", () => { state.review.page += 1; renderReview(); });
+        document.getElementById("review-table").addEventListener("click", (event) => {
+            const button = event.target.closest("[data-score-id]");
+            if (!button || !state.evaluation) return;
+            const row = state.evaluation.rows.find((item) => item.id === Number(button.dataset.scoreId));
+            if (!row) return;
+            fillForm({ ...row, expected: row.actual === 1 ? "FRAUD" : "LEGIT", note: `Test row ${row.id}` });
+            document.getElementById("score-form").requestSubmit();
+        });
+
+        async function boot() {
+            if (window.Chart) {
+                Chart.defaults.font.family = '"Segoe UI", sans-serif';
+                Chart.defaults.font.size = 11;
+                Chart.defaults.color = "#605e5c";
+                Chart.defaults.borderColor = "#edebe9";
+            }
+            try {
+                const [health, meta, summary, prep] = await Promise.all([
+                    api("/health"), api("/metadata"), api("/dataset/summary"), api("/preprocessing"),
+                ]);
+                state.meta = meta;
+                state.summary = summary;
+                state.prep = prep;
+                renderStatus(health);
+                renderChoices();
+                renderData();
+                renderPrep();
+                await refreshModelsAndEval();
+                logLine("Ready. " + Number(summary.rows).toLocaleString() + " rows.");
+                logComparison(state.models && state.models.comparison);
+                if (summary.examples && summary.examples.length) fillForm(summary.examples[0], { silent: true });
+            } catch (error) { toast(error.message, true); }
+        }
+        boot();
+    </script>
+</body>
+</html>
